@@ -129,9 +129,7 @@ class _BookIllustration extends StatelessWidget {
 
 class _BookPainter extends CustomPainter {
   static const Color hijauGelap = Color(0xFF1F4433);
-  static const Color hijauSedang = Color(0xFF2D5A45);
   static const Color hijauTerang = Color(0xFF3D7A5A);
-  static const Color hijauAksen = Color(0xFF4A9068);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -165,7 +163,7 @@ class _BookPainter extends CustomPainter {
 
     // ── Bayangan di bawah ──
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.25)
+      ..color = Colors.black.withValues(alpha: 0.25)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
     canvas.drawOval(
       Rect.fromCenter(
@@ -190,7 +188,7 @@ class _BookPainter extends CustomPainter {
     canvas.translate(center.dx, center.dy);
     canvas.rotate(angle);
 
-    final paint = Paint()..color = color.withOpacity(opacity);
+    final paint = Paint()..color = color.withValues(alpha: opacity);
     final rect = Rect.fromCenter(
       center: Offset.zero,
       width: width,
@@ -211,7 +209,7 @@ class _BookPainter extends CustomPainter {
 
     // Body buku utama
     final bodyPaint = Paint()
-      ..color = const Color(0xFF2A5240).withOpacity(0.85);
+      ..color = const Color(0xFF2A5240).withValues(alpha: 0.85);
     final bodyRect = Rect.fromCenter(
       center: Offset.zero,
       width: w,
@@ -223,7 +221,7 @@ class _BookPainter extends CustomPainter {
 
     // Efek glossy/kaca di atas
     final glossPaint = Paint()
-      ..color = Colors.white.withOpacity(0.08);
+      ..color = Colors.white.withValues(alpha: 0.08);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(-w / 2, -h / 2, w, h * 0.45),
@@ -234,21 +232,21 @@ class _BookPainter extends CustomPainter {
 
     // Garis dekorasi (seperti teks di cover)
     final linePaint = Paint()
-      ..color = Colors.white.withOpacity(0.35)
+      ..color = Colors.white.withValues(alpha: 0.35)
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
 
     canvas.drawLine(Offset(-22, -22), Offset(22, -22), linePaint);
 
     final linePaint2 = Paint()
-      ..color = Colors.white.withOpacity(0.2)
+      ..color = Colors.white.withValues(alpha: 0.2)
       ..strokeWidth = 4
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(Offset(-16, -8), Offset(16, -8), linePaint2);
 
     // Ikon berlian di tengah bawah
     final diamondPaint = Paint()
-      ..color = Colors.white.withOpacity(0.4)
+      ..color = Colors.white.withValues(alpha: 0.4)
       ..style = PaintingStyle.fill;
 
     final diamondPath = Path()
