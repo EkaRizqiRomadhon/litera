@@ -1,17 +1,48 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'controllers/navigation_controller.dart';
+import 'controllers/profile_controller.dart';
 import 'firebase_options.dart';
-import 'pages/splash_page.dart';
-import 'pages/home_page.dart';
 import 'pages/login_page.dart';
+import 'pages/main_page.dart';
+import 'pages/splash_page.dart';
+import 'providers/book_provider.dart';
+import 'providers/bookmark_provider.dart';
+import 'providers/reading_provider.dart';
 
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier<ThemeMode>(
+  ThemeMode.dark,
+);
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const LiteraApp());
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ProfileController>(
+          create: (_) => ProfileController(),
+        ),
+        ChangeNotifierProvider<NavigationController>(
+          create: (_) => NavigationController(),
+        ),
+        ChangeNotifierProvider<BookProvider>(
+          create: (_) => BookProvider(),
+        ),
+        ChangeNotifierProvider<BookmarkProvider>(
+          create: (_) => BookmarkProvider(),
+        ),
+        ChangeNotifierProvider<ReadingProvider>(
+          create: (_) => ReadingProvider(),
+        ),
+      ],
+      child: const LiteraApp(),
+    ),
+  );
 }
 
 class LiteraApp extends StatelessWidget {
@@ -21,17 +52,25 @@ class LiteraApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, ThemeMode currentMode, __) {
+      builder: (_, currentMode, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Litera',
           theme: ThemeData(
             useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2D5A41), brightness: Brightness.light),
+            fontFamily: 'Roboto',
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF2D5A41),
+              brightness: Brightness.light,
+            ),
           ),
           darkTheme: ThemeData(
             useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2D5A41), brightness: Brightness.dark),
+            fontFamily: 'Roboto',
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF2D5A41),
+              brightness: Brightness.dark,
+            ),
           ),
           themeMode: currentMode,
           home: StreamBuilder<User?>(
@@ -40,9 +79,22 @@ class LiteraApp extends StatelessWidget {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SplashPage();
               }
+
               if (snapshot.hasData) {
-                return const HomePage();
+                // Mulai Firestore listeners saat user login
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  context.read<BookmarkProvider>().startListening();
+                  context.read<ReadingProvider>().startListening();
+                });
+                return const MainPage();
               }
+
+              // Stop listeners saat logout
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                context.read<BookmarkProvider>().stopListening();
+                context.read<ReadingProvider>().stopListening();
+              });
+
               return const LoginPage();
             },
           ),

@@ -1,98 +1,348 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../auth_service.dart';
-import '../main.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
-class ProfilePage extends StatefulWidget {
+import '../auth_service.dart';
+import '../controllers/profile_controller.dart';
+import '../main.dart';
+import '../widgets/profile_avatar.dart';
+import '../widgets/profile_menu_tile.dart';
+import '../widgets/stat_card.dart';
+
+class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  Widget build(BuildContext context) {
+    return const _ProfileView();
+  }
 }
 
-class _ProfilePageState extends State<ProfilePage> {
-  final _auth = FirebaseAuth.instance;
+class _ProfileView extends StatelessWidget {
+  const _ProfileView();
 
-  // --- Edit Nama ---
-  void _showEditNameSheet() {
-    final user = _auth.currentUser;
-    final nameController = TextEditingController(text: user?.displayName ?? '');
-    final formKey = GlobalKey<FormState>();
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Consumer<ProfileController>(
+      builder: (context, controller, _) {
+        // Tampilkan error dari controller jika ada
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (controller.errorMessage != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(controller.errorMessage!),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            controller.clearError();
+          }
+        });
+
+        return StreamBuilder<User?>(
+          stream: controller.userStream,
+          initialData: controller.currentUser,
+          builder: (context, snapshot) {
+            final user = snapshot.data;
+
+            return ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               children: [
-                const Text(
-                  'Edit Nama',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                const SizedBox(height: 12),
+                _buildAvatarSection(context, controller, user),
+                const SizedBox(height: 28),
+                _buildSectionTitle('Statistik Membaca'),
+                const SizedBox(height: 12),
+                _buildStats(),
+                const SizedBox(height: 28),
+                _buildSectionTitle('Akun'),
+                const SizedBox(height: 4),
+                _buildAccountSection(context, controller, user),
                 const SizedBox(height: 16),
-                TextFormField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: 'Nama Tampilan',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Nama tidak boleh kosong' : null,
-                ),
+                _buildSectionTitle('Tampilan'),
+                const SizedBox(height: 4),
+                _buildThemeSwitch(isDark),
+                const SizedBox(height: 16),
+                _buildSectionTitle('Lainnya'),
+                const SizedBox(height: 4),
+                _buildOtherSection(context),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 8),
+                _buildLogoutButton(context),
                 const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2D5A41),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: () async {
-                      if (formKey.currentState!.validate()) {
-                        await user?.updateDisplayName(nameController.text.trim());
-                        await user?.reload();
-                        if (mounted) {
-                          setState(() {});
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Nama berhasil diperbarui!')),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text('Simpan', style: TextStyle(fontSize: 16)),
-                  ),
-                ),
               ],
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  // --- Dialog Konfirmasi Logout ---
-  void _showLogoutDialog() {
+  Widget _buildAvatarSection(BuildContext context, ProfileController controller, User? user) {
+    return Column(
+      children: [
+        ProfileAvatar(
+          photoUrl: user?.photoURL,
+          photoVersion: controller.photoVersion,
+          isLoading: controller.isLoading,
+          onTap: () => _showImageSourceSheet(context, controller, user),
+        ),
+        const SizedBox(height: 14),
+        Text(user?.displayName ?? 'Pengguna Litera', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(user?.email ?? '-', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        const SizedBox(height: 8),
+        Chip(
+          avatar: Icon(user?.emailVerified == true ? Icons.verified : Icons.warning_amber, size: 16, color: user?.emailVerified == true ? Colors.green : Colors.orange),
+          label: Text(user?.emailVerified == true ? 'Email Terverifikasi' : 'Email Belum Diverifikasi', style: TextStyle(fontSize: 12, color: user?.emailVerified == true ? Colors.green : Colors.orange)),
+          backgroundColor: (user?.emailVerified == true ? Colors.green : Colors.orange).withValues(alpha: 0.1),
+          side: BorderSide.none,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStats() {
+    return const Row(
+      children: [
+        StatCard(label: 'Buku\nDibaca', value: '12', icon: Icons.menu_book, color: Color(0xFF2D5A41)),
+        SizedBox(width: 10),
+        StatCard(label: 'Jam\nMembaca', value: '48', icon: Icons.schedule, color: Colors.blue),
+        SizedBox(width: 10),
+        StatCard(label: 'Hari\nBeruntun', value: '7', icon: Icons.local_fire_department, color: Colors.orange),
+      ],
+    );
+  }
+
+  Widget _buildAccountSection(BuildContext context, ProfileController controller, User? user) {
+    return Column(
+      children: [
+        ProfileMenuTile(
+          icon: Icons.person_outline,
+          iconColor: Colors.blue,
+          title: 'Edit Nama',
+          subtitle: user?.displayName ?? 'Belum diatur',
+          onTap: () => _showEditNameDialog(context, controller),
+        ),
+        ProfileMenuTile(icon: Icons.email_outlined, iconColor: Colors.teal, title: 'Email', subtitle: user?.email ?? '-', trailing: const SizedBox.shrink()),
+        if (user?.emailVerified == false)
+          ProfileMenuTile(
+            icon: Icons.mark_email_unread_outlined,
+            iconColor: Colors.orange,
+            title: 'Kirim Ulang Verifikasi Email',
+            onTap: () async {
+              await controller.sendVerificationEmail();
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email verifikasi telah dikirim!')));
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildThemeSwitch(bool isDark) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, currentMode, _) {
+        final isDarkMode = currentMode == ThemeMode.dark || (currentMode == ThemeMode.system && isDark);
+        return SwitchListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          secondary: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(color: Colors.purple.withValues(alpha: 0.12), shape: BoxShape.circle),
+            child: Icon(isDarkMode ? Icons.dark_mode : Icons.light_mode, color: Colors.purple, size: 22),
+          ),
+          title: const Text('Tema Gelap', style: TextStyle(fontWeight: FontWeight.w500)),
+          subtitle: Text(isDarkMode ? 'Aktif' : 'Nonaktif', style: const TextStyle(fontSize: 12)),
+          value: isDarkMode,
+          activeThumbColor: const Color(0xFF2D5A41),
+          onChanged: (value) => themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light,
+        );
+      },
+    );
+  }
+
+  Widget _buildOtherSection(BuildContext context) {
+    return Column(
+      children: [
+        ProfileMenuTile(icon: Icons.help_outline, iconColor: Colors.orange, title: 'Pusat Bantuan', onTap: () {}),
+        ProfileMenuTile(
+          icon: Icons.info_outline,
+          iconColor: Colors.grey,
+          title: 'Tentang Aplikasi',
+          subtitle: 'Versi 1.0.0',
+          onTap: () => showAboutDialog(context: context, applicationName: 'Litera', applicationVersion: '1.0.0', applicationLegalese: '© 2025 Litera App'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogoutButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _showLogoutDialog(context),
+        icon: const Icon(Icons.logout, color: Colors.red),
+        label: const Text('Keluar Akun', style: TextStyle(fontSize: 16, color: Colors.red)),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Colors.red, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600));
+  }
+
+  void _showImageSourceSheet(BuildContext context, ProfileController controller, User? user) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(padding: EdgeInsets.all(16), child: Text('Pilih Foto Profil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Kamera'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndPreview(context, controller, ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galeri'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndPreview(context, controller, ImageSource.gallery);
+              },
+            ),
+            if (user?.photoURL != null)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Hapus Foto', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDelete(context, controller);
+                },
+              ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndPreview(BuildContext context, ProfileController controller, ImageSource source) async {
+    final file = await controller.pickImageFromSource(source);
+    if (file == null || !context.mounted) return;
+    _showPreviewDialog(context, controller, file);
+  }
+
+  void _showPreviewDialog(BuildContext context, ProfileController controller, File file) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Preview Foto'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(file, height: 200, width: 200, fit: BoxFit.cover)),
+            const SizedBox(height: 10),
+            const Text('Gunakan foto ini sebagai profil Anda?', textAlign: TextAlign.center),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2D5A41)),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await controller.uploadProfilePhoto(file);
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(success ? 'Foto profil berhasil diperbarui!' : (controller.errorMessage ?? 'Gagal upload.')), backgroundColor: success ? Colors.green : Colors.red, behavior: SnackBarBehavior.floating));
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, ProfileController controller) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Foto?'),
+        content: const Text('Foto profil Anda akan dihapus dan diganti dengan avatar default.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await controller.deleteProfilePhoto();
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto profil dihapus.')));
+            },
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditNameDialog(BuildContext context, ProfileController controller) {
+    final nameController = TextEditingController(text: controller.currentUser?.displayName ?? '');
+    final formKey = GlobalKey<FormState>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(left: 24, right: 24, top: 24, bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Edit Nama', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              TextFormField(controller: nameController, autofocus: true, decoration: InputDecoration(labelText: 'Nama Tampilan', prefixIcon: const Icon(Icons.person_outline), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), validator: (v) => (v == null || v.trim().isEmpty) ? 'Nama tidak boleh kosong' : null),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2D5A41), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)),
+                  onPressed: () async {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.pop(ctx);
+                      final success = await controller.updateName(nameController.text.trim());
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(success ? 'Nama berhasil diperbarui!' : (controller.errorMessage ?? 'Gagal update nama.')), backgroundColor: success ? Colors.green : Colors.red, behavior: SnackBarBehavior.floating));
+                    }
+                  },
+                  child: const Text('Simpan', style: TextStyle(fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -100,309 +350,10 @@ class _ProfilePageState extends State<ProfilePage> {
         title: const Text('Keluar Akun?'),
         content: const Text('Kamu akan keluar dari akun Litera-mu. Yakin?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              AuthService().signOut();
-            },
-            child: const Text('Keluar'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: () { Navigator.pop(ctx); AuthService().signOut(); }, child: const Text('Keluar')),
         ],
       ),
-    );
-  }
-
-  // --- Widget: Kartu Statistik ---
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 26),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- Widget: Menu Item ---
-  Widget _buildMenuTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    String? subtitle,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      leading: Container(
-        padding: const EdgeInsets.all(9),
-        decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.12),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: iconColor, size: 22),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: subtitle != null ? Text(subtitle, style: const TextStyle(fontSize: 12)) : null,
-      trailing: trailing ?? const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = _auth.currentUser;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      children: [
-        // ── Avatar & Nama ──────────────────────────────────────────
-        const SizedBox(height: 12),
-        Center(
-          child: Stack(
-            children: [
-              CircleAvatar(
-                radius: 52,
-                backgroundImage: user?.photoURL != null
-                    ? NetworkImage(user!.photoURL!)
-                    : null,
-                backgroundColor: const Color(0xFF2D5A41).withOpacity(0.15),
-                child: user?.photoURL == null
-                    ? const Icon(Icons.person, size: 58, color: Color(0xFF2D5A41))
-                    : null,
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                  onTap: _showEditNameSheet,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF2D5A41),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.edit, color: Colors.white, size: 16),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        Center(
-          child: Text(
-            user?.displayName ?? 'Pengguna Litera',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Center(
-          child: Text(
-            user?.email ?? '-',
-            style: const TextStyle(color: Colors.grey, fontSize: 13),
-          ),
-        ),
-        const SizedBox(height: 6),
-        // Badge verifikasi email
-        Center(
-          child: Chip(
-            avatar: Icon(
-              user?.emailVerified == true ? Icons.verified : Icons.warning_amber,
-              size: 16,
-              color: user?.emailVerified == true ? Colors.green : Colors.orange,
-            ),
-            label: Text(
-              user?.emailVerified == true ? 'Email Terverifikasi' : 'Email Belum Diverifikasi',
-              style: TextStyle(
-                fontSize: 12,
-                color: user?.emailVerified == true ? Colors.green : Colors.orange,
-              ),
-            ),
-            backgroundColor: (user?.emailVerified == true ? Colors.green : Colors.orange)
-                .withOpacity(0.1),
-            side: BorderSide.none,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-          ),
-        ),
-
-        const SizedBox(height: 28),
-
-        // ── Statistik Membaca ──────────────────────────────────────
-        const Text(
-          'Statistik Membaca',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            _buildStatCard('Buku\nDibaca', '12', Icons.menu_book, const Color(0xFF2D5A41)),
-            const SizedBox(width: 10),
-            _buildStatCard('Jam\nMembaca', '48', Icons.schedule, Colors.blue),
-            const SizedBox(width: 10),
-            _buildStatCard('Hari\nBeruntun', '7', Icons.local_fire_department, Colors.orange),
-          ],
-        ),
-
-        const SizedBox(height: 28),
-
-        // ── Pengaturan Akun ────────────────────────────────────────
-        const Text(
-          'Akun',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        _buildMenuTile(
-          icon: Icons.person_outline,
-          iconColor: Colors.blue,
-          title: 'Edit Nama',
-          subtitle: user?.displayName ?? 'Belum diatur',
-          onTap: _showEditNameSheet,
-        ),
-        _buildMenuTile(
-          icon: Icons.email_outlined,
-          iconColor: Colors.teal,
-          title: 'Email',
-          subtitle: user?.email ?? '-',
-          trailing: const SizedBox.shrink(),
-        ),
-        if (user?.emailVerified == false)
-          _buildMenuTile(
-            icon: Icons.mark_email_unread_outlined,
-            iconColor: Colors.orange,
-            title: 'Kirim Ulang Verifikasi Email',
-            onTap: () async {
-              await user?.sendEmailVerification();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Email verifikasi telah dikirim!')),
-                );
-              }
-            },
-          ),
-
-        const SizedBox(height: 16),
-
-        // ── Pengaturan Tampilan ────────────────────────────────────
-        const Text(
-          'Tampilan',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        ValueListenableBuilder<ThemeMode>(
-          valueListenable: themeNotifier,
-          builder: (context, currentMode, _) {
-            final isDarkMode =
-                currentMode == ThemeMode.dark || (currentMode == ThemeMode.system && isDark);
-            return SwitchListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              secondary: Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                  color: Colors.purple,
-                  size: 22,
-                ),
-              ),
-              title: const Text('Tema Gelap', style: TextStyle(fontWeight: FontWeight.w500)),
-              subtitle: Text(isDarkMode ? 'Aktif' : 'Nonaktif',
-                  style: const TextStyle(fontSize: 12)),
-              value: isDarkMode,
-              activeColor: const Color(0xFF2D5A41),
-              onChanged: (value) {
-                themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
-              },
-            );
-          },
-        ),
-
-        const SizedBox(height: 16),
-
-        // ── Lainnya ────────────────────────────────────────────────
-        const Text(
-          'Lainnya',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        _buildMenuTile(
-          icon: Icons.help_outline,
-          iconColor: Colors.orange,
-          title: 'Pusat Bantuan',
-          onTap: () {},
-        ),
-        _buildMenuTile(
-          icon: Icons.info_outline,
-          iconColor: Colors.grey,
-          title: 'Tentang Aplikasi',
-          subtitle: 'Versi 1.0.0',
-          onTap: () {
-            showAboutDialog(
-              context: context,
-              applicationName: 'Litera',
-              applicationVersion: '1.0.0',
-              applicationLegalese: '© 2025 Litera App',
-            );
-          },
-        ),
-
-        const SizedBox(height: 24),
-        const Divider(),
-        const SizedBox(height: 8),
-
-        // ── Tombol Keluar ──────────────────────────────────────────
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _showLogoutDialog,
-            icon: const Icon(Icons.logout, color: Colors.red),
-            label: const Text(
-              'Keluar Akun',
-              style: TextStyle(fontSize: 16, color: Colors.red),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.red, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-      ],
     );
   }
 }
