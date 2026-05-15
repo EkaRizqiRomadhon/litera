@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Books collection: anyone can read, only backend/admin can write (or specific logic)
+    match /books/{bookId} {
+      allow read: if true;
+      allow write: if isSignedIn(); // In production, usually restricted to admin
+      
+      // Ratings subcollection
+      match /ratings/{userId} {
+        allow read: if true;
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // User private data
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /bookmarks/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /reading_history/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

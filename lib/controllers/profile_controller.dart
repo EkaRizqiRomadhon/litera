@@ -8,17 +8,14 @@ import '../services/profile_service.dart';
 
 class ProfileController extends ChangeNotifier {
   final _picker = ImagePicker();
-  final _uploadService = ImageUploadService();
+  final _imageService = ImageUploadService();
   final _profileService = ProfileService();
 
   bool _isLoading = false;
   String? _errorMessage;
-  // Timestamp digunakan untuk cache busting, diperbarui setiap kali foto berubah
-  int _photoVersion = DateTime.now().millisecondsSinceEpoch;
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  int get photoVersion => _photoVersion;
 
   // Cache stream agar tidak membuat instance baru setiap kali diakses
   late final Stream<User?> userStream = _profileService.userStream;
@@ -29,27 +26,23 @@ class ProfileController extends ChangeNotifier {
     try {
       final picked = await _picker.pickImage(
         source: source,
-        imageQuality: 50,
+        imageQuality: 70, // Slightly higher quality for Storage
+        maxWidth: 1000,   // Resize for efficiency
+        maxHeight: 1000,
       );
       if (picked == null) return null;
 
       final file = File(picked.path);
       final sizeInBytes = await file.length();
 
-      // Validasi ukuran max 2MB
-      if (sizeInBytes > 2 * 1024 * 1024) {
-        throw Exception('Ukuran file melebihi batas 2MB.');
-      }
-
-      // Validasi format file
-      final ext = picked.path.split('.').last.toLowerCase();
-      if (!['jpg', 'jpeg', 'png'].contains(ext)) {
-        throw Exception('Format file harus JPG, JPEG, atau PNG.');
+      // Validasi ukuran max 5MB
+      if (sizeInBytes > 5 * 1024 * 1024) {
+        throw Exception('Ukuran file melebihi batas 5MB.');
       }
 
       return file;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
       notifyListeners();
       return null;
     }
@@ -59,10 +52,12 @@ class ProfileController extends ChangeNotifier {
   Future<bool> uploadProfilePhoto(File file) async {
     _setLoading(true);
     try {
-      final url = await _uploadService.uploadImage(file);
+      // 1. Upload to free-tier provider (Cloudinary)
+      final url = await _imageService.uploadImage(file);
+      
+      // 2. Update Firebase Auth Profile
       await _profileService.updatePhoto(url);
-      // Refresh cache buster agar Image.network memuat ulang gambar terbaru
-      _photoVersion = DateTime.now().millisecondsSinceEpoch;
+      
       _errorMessage = null;
       notifyListeners();
       return true;
@@ -79,8 +74,11 @@ class ProfileController extends ChangeNotifier {
   Future<bool> deleteProfilePhoto() async {
     _setLoading(true);
     try {
+      final user = _profileService.currentUser;
+      if (user?.photoURL != null) {
+        await _imageService.deleteImage(user!.photoURL!);
+      }
       await _profileService.removePhoto();
-      _photoVersion = DateTime.now().millisecondsSinceEpoch;
       _errorMessage = null;
       notifyListeners();
       return true;

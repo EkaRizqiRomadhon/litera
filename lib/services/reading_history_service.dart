@@ -14,7 +14,7 @@ class ReadingHistoryService {
       _firestore
           .collection('users')
           .doc(uid)
-          .collection('reading_history');
+          .collection('history');
 
   // ── Streams ──────────────────────────────────────────────────────────
 

@@ -1,28 +1,76 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../core/app_constants.dart';
 import '../models/book_model.dart';
 
-/// Service untuk mengambil data dari Google Books API
+/// Service untuk mengambil data dari Google Books API.
+/// Fitur: retry on 429, timeout, caching in-memory, pagination.
 class GoogleBooksService {
-  static const String _baseUrl = 'https://www.googleapis.com/books/v1/volumes';
+  // ── In-memory cache ──────────────────────────────────────────────────────────
+  static final Map<String, _CacheEntry> _cache = {};
+  static const Duration _cacheTtl = Duration(minutes: 10);
 
-  // API Key (kosongkan untuk tanpa key, ada limit request)
-  // Untuk production: tambahkan API key Anda di sini
-  static const String _apiKey = '';
-
-  static const int _maxResults = 20;
-
-  // ── Internal helper ──────────────────────────────────────────────────
-  static String _buildUrl(String query, {int startIndex = 0, int maxResults = _maxResults}) {
-    final buffer = StringBuffer('$_baseUrl?q=${Uri.encodeQueryComponent(query)}');
-    buffer.write('&maxResults=$maxResults');
-    buffer.write('&startIndex=$startIndex');
-    buffer.write('&printType=books');
-    buffer.write('&langRestrict=id,en');
-    if (_apiKey.isNotEmpty) buffer.write('&key=$_apiKey');
-    return buffer.toString();
+  // ── URL Builder ──────────────────────────────────────────────────────────────
+  static String _buildUrl(
+    String query, {
+    int startIndex = 0,
+    int maxResults = AppConstants.booksDefaultMax,
+    String? orderBy,
+    String? langRestrict,
+  }) {
+    final buf = StringBuffer(
+      '${AppConstants.booksApiBase}?q=${Uri.encodeQueryComponent(query)}',
+    );
+    buf.write('&maxResults=$maxResults');
+    buf.write('&startIndex=$startIndex');
+    buf.write('&printType=books');
+    if (orderBy != null) buf.write('&orderBy=$orderBy');
+    if (langRestrict != null) buf.write('&langRestrict=$langRestrict');
+    if (AppConstants.booksApiKey.isNotEmpty) {
+      buf.write('&key=${AppConstants.booksApiKey}');
+    }
+    return buf.toString();
   }
 
+  // ── HTTP fetch with cache + retry ────────────────────────────────────────────
+  static Future<Map<String, dynamic>> _fetchJson(String url) async {
+    // Check cache
+    final cached = _cache[url];
+    if (cached != null && !cached.isExpired) return cached.data;
+
+    Future<http.Response> doGet() =>
+        http.get(Uri.parse(url), headers: {'Accept': 'application/json'})
+            .timeout(AppConstants.booksTimeout);
+
+    http.Response response;
+    try {
+      response = await doGet();
+    } on TimeoutException {
+      throw Exception('errorTimeout');
+    } catch (e) {
+      throw Exception('errorNoInternet');
+    }
+
+    if (response.statusCode == 429) {
+      await Future.delayed(AppConstants.booksRetryDelay);
+      try {
+        response = await doGet();
+      } on TimeoutException {
+        throw Exception('errorTimeout');
+      }
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Google Books API error: ${response.statusCode}');
+    }
+
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    _cache[url] = _CacheEntry(data);
+    return data;
+  }
+
+  // ── Parsers ──────────────────────────────────────────────────────────────────
   static List<BookModel> _parseItems(Map<String, dynamic> json) {
     final items = json['items'] as List<dynamic>? ?? [];
     return items
@@ -32,75 +80,90 @@ class GoogleBooksService {
         .toList();
   }
 
-  static Future<Map<String, dynamic>> _fetchJson(String url) async {
-    final response = await http.get(Uri.parse(url)).timeout(
-      const Duration(seconds: 15),
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Google Books API error: ${response.statusCode}');
-    }
-    return json.decode(response.body) as Map<String, dynamic>;
-  }
+  // ── Public API ───────────────────────────────────────────────────────────────
 
-  // ── Public Methods ───────────────────────────────────────────────────
-
-  /// Cari buku berdasarkan query teks
+  /// Search books by query, with optional pagination.
   static Future<List<BookModel>> searchBooks(
     String query, {
     int startIndex = 0,
-    int maxResults = _maxResults,
+    int maxResults = AppConstants.booksDefaultMax,
   }) async {
     if (query.trim().isEmpty) return [];
     final url = _buildUrl(query, startIndex: startIndex, maxResults: maxResults);
-    final json = await _fetchJson(url);
-    return _parseItems(json);
+    final result = await _fetchJson(url);
+    return _parseItems(result);
   }
 
-  /// Ambil buku berdasarkan kategori / subject
+  /// Fetch books by category/subject.
   static Future<List<BookModel>> getBooksByCategory(
     String category, {
-    int maxResults = _maxResults,
-  }) async {
-    final url = _buildUrl('subject:$category', maxResults: maxResults);
-    final json = await _fetchJson(url);
-    return _parseItems(json);
-  }
-
-  /// Ambil buku populer (berdasarkan rating tinggi)
-  static Future<List<BookModel>> getPopularBooks({
-    String language = 'id',
-    int maxResults = _maxResults,
+    int startIndex = 0,
+    int maxResults = AppConstants.booksDefaultMax,
   }) async {
     final url = _buildUrl(
-      'subject:fiction+bestseller',
+      'subject:$category',
+      startIndex: startIndex,
       maxResults: maxResults,
     );
-    final json = await _fetchJson(url);
-    final books = _parseItems(json);
-    // Urutkan berdasarkan rating
-    books.sort((a, b) => b.averageRating.compareTo(a.averageRating));
+    final result = await _fetchJson(url);
+    return _parseItems(result);
+  }
+
+  /// Fetch popular books (fiction, sorted by relevance with cover prioritized).
+  static Future<List<BookModel>> getPopularBooks({
+    int maxResults = AppConstants.booksDefaultMax,
+  }) async {
+    final url = _buildUrl('subject:fiction', maxResults: maxResults, orderBy: 'relevance');
+    final result = await _fetchJson(url);
+    final books = _parseItems(result);
+    books.sort((a, b) {
+      final aScore = (a.averageRating * 10).toInt() +
+          (a.thumbnail != null ? 5 : 0) +
+          (a.ratingsCount > 0 ? 3 : 0);
+      final bScore = (b.averageRating * 10).toInt() +
+          (b.thumbnail != null ? 5 : 0) +
+          (b.ratingsCount > 0 ? 3 : 0);
+      return bScore.compareTo(aScore);
+    });
     return books;
   }
 
-  /// Ambil buku terbaru (berdasarkan tahun publish)
+  /// Fetch newest books.
   static Future<List<BookModel>> getNewestBooks({
-    int maxResults = _maxResults,
+    int maxResults = AppConstants.booksDefaultMax,
   }) async {
-    final url = '${_buildUrl('subject:fiction', maxResults: maxResults)}'
-        '&orderBy=newest';
-    final json = await _fetchJson(url);
-    return _parseItems(json);
+    final url = _buildUrl('subject:fiction', maxResults: maxResults, orderBy: 'newest');
+    final result = await _fetchJson(url);
+    return _parseItems(result);
   }
 
-  /// Ambil detail satu buku berdasarkan ID
+  /// Fetch trending books (bestseller query, relevance sort).
+  static Future<List<BookModel>> getTrendingBooks({
+    int maxResults = AppConstants.booksDefaultMax,
+  }) async {
+    final url = _buildUrl('bestseller', maxResults: maxResults, orderBy: 'relevance');
+    final result = await _fetchJson(url);
+    return _parseItems(result);
+  }
+
+  /// Fetch books for "Recommended" section based on rotating categories.
+  static Future<List<BookModel>> getRecommendations({
+    List<String> categories = const ['fiction', 'self-help', 'technology'],
+    int maxResults = AppConstants.booksDefaultMax,
+  }) async {
+    final idx = DateTime.now().millisecondsSinceEpoch % categories.length;
+    return getBooksByCategory(categories[idx], maxResults: maxResults);
+  }
+
+  /// Fetch detail of a single book by ID.
   static Future<BookModel?> getBookById(String bookId) async {
-    final url = _apiKey.isNotEmpty
-        ? '$_baseUrl/$bookId?key=$_apiKey'
-        : '$_baseUrl/$bookId';
+    final url = AppConstants.booksApiKey.isNotEmpty
+        ? '${AppConstants.booksApiBase}/$bookId?key=${AppConstants.booksApiKey}'
+        : '${AppConstants.booksApiBase}/$bookId';
     try {
-      final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: 15),
-      );
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) return null;
       final data = json.decode(response.body) as Map<String, dynamic>;
       return BookModel.fromJson(data);
@@ -109,7 +172,7 @@ class GoogleBooksService {
     }
   }
 
-  /// Ambil buku rekomendasi berdasarkan kategori/author buku yang sedang dibaca
+  /// Fetch related books based on category or author of a given book.
   static Future<List<BookModel>> getRelatedBooks(
     BookModel book, {
     int maxResults = 8,
@@ -126,28 +189,31 @@ class GoogleBooksService {
     try {
       final data = await _fetchJson(url);
       final books = _parseItems(data);
-      // Hapus buku yang sama dari hasil
       return books.where((b) => b.id != book.id).take(6).toList();
     } catch (_) {
       return [];
     }
   }
 
-  /// Ambil rekomendasi berdasarkan daftar kategori favorit
-  static Future<List<BookModel>> getRecommendations({
-    List<String> categories = const ['fiction', 'self-help'],
-    int maxResults = _maxResults,
-  }) async {
-    final category = categories[
-        DateTime.now().millisecondsSinceEpoch % categories.length];
-    return getBooksByCategory(category, maxResults: maxResults);
-  }
+  /// Invalidate entire cache (call on pull-to-refresh).
+  static void clearCache() => _cache.clear();
 }
 
-/// Kategori buku yang tersedia di aplikasi
+// ── Cache Entry ──────────────────────────────────────────────────────────────
+class _CacheEntry {
+  final Map<String, dynamic> data;
+  final DateTime _createdAt = DateTime.now();
+
+  _CacheEntry(this.data);
+
+  bool get isExpired =>
+      DateTime.now().difference(_createdAt) > GoogleBooksService._cacheTtl;
+}
+
+// ── Book Categories ──────────────────────────────────────────────────────────
 class BookCategory {
   final String label;
-  final String query; // query untuk Google Books API
+  final String query;
 
   const BookCategory({required this.label, required this.query});
 
@@ -156,11 +222,13 @@ class BookCategory {
     BookCategory(label: 'Novel', query: 'subject:fiction novel'),
     BookCategory(label: 'Teknologi', query: 'subject:technology computers'),
     BookCategory(label: 'Bisnis', query: 'subject:business economics'),
-    BookCategory(label: 'Sejarah', query: 'subject:history indonesia'),
+    BookCategory(label: 'Sejarah', query: 'subject:history'),
     BookCategory(label: 'Self-Help', query: 'subject:self-help motivation'),
     BookCategory(label: 'Romance', query: 'subject:romance love'),
     BookCategory(label: 'Fantasy', query: 'subject:fantasy magic'),
     BookCategory(label: 'Sains', query: 'subject:science popular'),
     BookCategory(label: 'Biografi', query: 'subject:biography autobiography'),
+    BookCategory(label: 'Horror', query: 'subject:horror thriller'),
+    BookCategory(label: 'Edukasi', query: 'subject:education'),
   ];
 }

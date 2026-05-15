@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:litera2/l10n/app_localizations.dart';
 
-import '../controllers/navigation_controller.dart';
+import '../core/app_colors.dart';
+import '../providers/navigation_provider.dart';
 import '../widgets/profile_avatar.dart';
 import 'dashboard_page.dart';
 import 'explore_page.dart';
@@ -13,67 +15,95 @@ class MainPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // List halaman yang akan ditampilkan
-    final List<Widget> pages = const [
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+
+    const pages = [
       DashboardPage(),
       ExplorePage(),
       LibraryPage(),
       ProfilePage(),
     ];
 
-    return Consumer<NavigationController>(
-      builder: (context, navControl, child) {
+    return Consumer<NavigationProvider>(
+      builder: (context, nav, _) {
         return Scaffold(
-          appBar: AppBar(
-            title: const Text(
-              'Litera',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: const Color(0xFF2D5A41),
-            foregroundColor: Colors.white,
-            actions: const [
-              Padding(
-                padding: EdgeInsets.only(right: 16),
-                child: SmallProfileAvatar(radius: 16),
-              ),
-            ],
+          extendBody: true, // Crucial for floating navbar effect
+          body: IndexedStack(
+            index: nav.selectedIndex,
+            children: pages,
           ),
-          body: pages[navControl.selectedIndex],
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: navControl.selectedIndex,
-            onTap: (index) => navControl.setIndex(index),
-            selectedItemColor: const Color(0xFF2D5A41),
-            unselectedItemColor: Colors.grey,
-            type: BottomNavigationBarType.fixed,
-            items: [
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.home),
-                label: 'Beranda',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.explore),
-                label: 'Eksplor',
-              ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.library_books),
-                label: 'Koleksi',
-              ),
-              BottomNavigationBarItem(
-                icon: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: navControl.selectedIndex == 3
-                        ? Border.all(color: const Color(0xFF2D5A41), width: 2)
-                        : null,
-                  ),
-                  child: const SmallProfileAvatar(radius: 12),
-                ),
-                label: 'Profil',
-              ),
-            ],
-          ),
+          bottomNavigationBar: _buildFloatingNavBar(context, nav, l10n, isDark, cs),
         );
       },
+    );
+  }
+
+  Widget _buildFloatingNavBar(
+    BuildContext context, 
+    NavigationProvider nav, 
+    AppLocalizations l10n, 
+    bool isDark, 
+    ColorScheme cs
+  ) {
+    return Container(
+      height: 75,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 25),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.navBackgroundDark : AppColors.navBackground,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: isDark ? 0.3 : 0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: NavigationBar(
+          selectedIndex: nav.selectedIndex,
+          onDestinationSelected: nav.setIndex,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          indicatorColor: Colors.white.withValues(alpha: 0.15),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.home_outlined),
+              selectedIcon: const Icon(Icons.home_rounded),
+              label: l10n.dashboardTitle,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.explore_outlined),
+              selectedIcon: const Icon(Icons.explore_rounded),
+              label: l10n.exploreTitle,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.bookmark_outline_rounded),
+              selectedIcon: const Icon(Icons.bookmark_rounded),
+              label: l10n.myCollection,
+            ),
+            NavigationDestination(
+              icon: const Padding(
+                padding: EdgeInsets.all(2),
+                child: SmallProfileAvatar(radius: 11),
+              ),
+              selectedIcon: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: const SmallProfileAvatar(radius: 11),
+              ),
+              label: l10n.profileTitle,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

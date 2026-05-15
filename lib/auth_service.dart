@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'models/user_profile_model.dart';
+import 'services/user_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -30,14 +32,25 @@ class AuthService {
   }
 
   // 2. REGISTER
-  Future<String> register(String email, String password) async {
+  Future<String> register(String email, String password, String name) async {
     try {
-      await _auth.createUserWithEmailAndPassword(
+      UserCredential credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      await _auth.signOut();
+      final user = credential.user;
+      if (user != null) {
+        await user.updateDisplayName(name);
+        // Create profile in Firestore
+        final profile = UserProfileModel(
+          uid: user.uid,
+          displayName: name,
+          email: email,
+          createdAt: DateTime.now(),
+        );
+        await UserService.saveProfile(profile);
+      }
 
       return "success";
     } on FirebaseAuthException catch (e) {
@@ -48,7 +61,23 @@ class AuthService {
   // 3. LOGIN EMAIL
   Future<String> login(String email, String password) async {
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      UserCredential credential =
+          await _auth.signInWithEmailAndPassword(email: email, password: password);
+      
+      // Sync profile if missing
+      final user = credential.user;
+      if (user != null) {
+        final existing = await UserService.getProfile();
+        if (existing == null) {
+          final profile = UserProfileModel(
+            uid: user.uid,
+            displayName: user.displayName ?? 'Pembaca',
+            email: email,
+            createdAt: DateTime.now(),
+          );
+          await UserService.saveProfile(profile);
+        }
+      }
       return "success";
     } on FirebaseAuthException catch (e) {
       return e.message ?? "Email atau Password salah";

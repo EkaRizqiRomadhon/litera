@@ -105,9 +105,20 @@ class BookmarkProvider extends ChangeNotifier {
 
   Future<void> removeBookmark(String bookId) async {
     if (!isBookmarked(bookId)) return;
-    final book = _bookmarks.firstWhere((b) => b.id == bookId,
-        orElse: () => const BookModel(id: '', title: ''));
-    if (book.id.isEmpty) return;
-    await toggleBookmark(book);
+
+    // Optimistic update
+    final removedBook = _bookmarks.firstWhere((b) => b.id == bookId);
+    _bookmarkedIds.remove(bookId);
+    _bookmarks.removeWhere((b) => b.id == bookId);
+    notifyListeners();
+
+    try {
+      await BookmarkService.removeBookmark(bookId);
+    } catch (e) {
+      // Rollback
+      _bookmarkedIds.add(bookId);
+      _bookmarks.insert(0, removedBook);
+      notifyListeners();
+    }
   }
 }

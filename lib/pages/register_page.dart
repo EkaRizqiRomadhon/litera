@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:litera2/l10n/app_localizations.dart';
+import '../core/app_colors.dart';
 import '../widgets/custom_elements.dart';
 import '../auth_service.dart';
 
@@ -12,7 +14,6 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
-
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -20,7 +21,6 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool _isAgreed = false;
   bool _isLoading = false;
-
   bool _isPasswordObscured = true;
   bool _isConfirmObscured = true;
 
@@ -34,67 +34,41 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   // ================= VALIDATION =================
-
-  String? _validateName(String? value) {
-    if (value == null || value.isEmpty) {
-      return "Nama wajib diisi";
-    }
-    if (value.length < 3) {
-      return "Minimal 3 karakter";
-    }
+  String? _validateName(String? value, AppLocalizations l10n) {
+    if (value == null || value.isEmpty) return l10n.errorGeneral;
+    if (value.length < 3) return l10n.errorGeneral;
     return null;
   }
 
-  String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return "Email wajib diisi";
-    }
-    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-      return "Format email tidak valid";
-    }
+  String? _validateEmail(String? value, AppLocalizations l10n) {
+    if (value == null || value.isEmpty) return l10n.emailEmpty;
+    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return l10n.loginError;
     return null;
   }
 
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return "Password wajib diisi";
-    }
-    if (value.length < 8) {
-      return "Minimal 8 karakter";
-    }
-    if (!RegExp(r'\d').hasMatch(value)) {
-      return "Harus mengandung angka";
-    }
+  String? _validatePassword(String? value, AppLocalizations l10n) {
+    if (value == null || value.isEmpty) return l10n.errorGeneral;
+    if (value.length < 8) return l10n.errorGeneral;
     return null;
   }
 
-  String? _validateConfirmPassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return "Konfirmasi password wajib diisi";
-    }
-    if (value.length < 8) {
-      return "Minimal 8 karakter";
-    }
-    if (value != _passwordController.text) {
-      return "Password tidak sama";
-    }
+  String? _validateConfirmPassword(String? value, AppLocalizations l10n) {
+    if (value == null || value.isEmpty) return l10n.errorGeneral;
+    if (value != _passwordController.text) return l10n.errorGeneral;
     return null;
   }
 
   // ================= DIALOG =================
-
-  void _showTermsDialog() {
+  void _showTermsDialog(AppLocalizations l10n) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Syarat & Ketentuan"),
-        content: const Text(
-          "Dengan menggunakan aplikasi ini, Anda setuju menjaga keamanan akun dan mematuhi semua aturan yang berlaku.",
-        ),
+        title: Text(l10n.termsAndConditions),
+        content: Text(l10n.termsDetail),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Tutup"),
+            child: Text(l10n.confirm),
           ),
         ],
       ),
@@ -102,46 +76,40 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   // ================= REGISTER =================
-
-  Future<void> _handleRegister() async {
+  Future<void> _handleRegister(AppLocalizations l10n) async {
     if (!_formKey.currentState!.validate()) return;
-
     if (!_isAgreed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Harap setujui Syarat & Ketentuan")),
+        SnackBar(content: Text(l10n.termsAgreementError)),
       );
       return;
     }
 
     setState(() => _isLoading = true);
-
     final result = await AuthService().register(
       _emailController.text.trim(),
       _passwordController.text.trim(),
+      _nameController.text.trim(),
     );
-
     if (!mounted) return;
-
     setState(() => _isLoading = false);
 
     if (result == "success") {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Daftar berhasil")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.registrationSuccess)));
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
     }
   }
 
   // ================= UI =================
-
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF2D5A41),
+      backgroundColor: AppColors.primary,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -149,75 +117,60 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
       body: Column(
         children: [
-          const Text(
-            'Buat Akun',
-            style: TextStyle(
+          Text(
+            l10n.createAccount,
+            style: const TextStyle(
               fontSize: 32,
               color: Colors.white,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const Text(
-            'Bergabung dan mulai membaca',
-            style: TextStyle(color: Colors.white70),
+          Text(
+            l10n.joinMessage,
+            style: const TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: 30),
-
           Expanded(
             child: Material(
-              color: const Color(0xFFF2F1ED),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(50),
-              ),
+              color: isDark ? AppColors.backgroundDark : const Color(0xFFF2F1ED),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(50)),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 30,
-                  vertical: 30,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 30),
                 child: SingleChildScrollView(
                   child: Form(
                     key: _formKey,
-                    autovalidateMode:
-                        AutovalidateMode.onUserInteraction, // 🔥 penting
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     child: Column(
                       children: [
                         buildInputField(
-                          label: "Nama Lengkap",
-                          hint: "Budi Santoso",
+                          label: l10n.fullName,
+                          hint: "John Doe",
                           controller: _nameController,
-                          validator: _validateName,
+                          validator: (v) => _validateName(v, l10n),
                         ),
                         buildInputField(
-                          label: "Email",
-                          hint: "budi@email.com",
+                          label: l10n.email,
+                          hint: "email@litera.com",
                           controller: _emailController,
-                          validator: _validateEmail,
+                          validator: (v) => _validateEmail(v, l10n),
                         ),
                         buildInputField(
-                          label: "Password",
-                          hint: "Min. 8 karakter",
+                          label: l10n.password,
+                          hint: "Min. 8 characters",
                           isPassword: true,
                           isObscured: _isPasswordObscured,
                           controller: _passwordController,
-                          validator: _validatePassword,
-                          onToggleVisibility: () {
-                            setState(() {
-                              _isPasswordObscured = !_isPasswordObscured;
-                            });
-                          },
+                          validator: (v) => _validatePassword(v, l10n),
+                          onToggleVisibility: () => setState(() => _isPasswordObscured = !_isPasswordObscured),
                         ),
                         buildInputField(
-                          label: "Konfirmasi Password",
-                          hint: "Ulangi password",
+                          label: l10n.confirmPassword,
+                          hint: l10n.confirmPassword,
                           isPassword: true,
                           isObscured: _isConfirmObscured,
                           controller: _confirmPasswordController,
-                          validator: _validateConfirmPassword,
-                          onToggleVisibility: () {
-                            setState(() {
-                              _isConfirmObscured = !_isConfirmObscured;
-                            });
-                          },
+                          validator: (v) => _validateConfirmPassword(v, l10n),
+                          onToggleVisibility: () => setState(() => _isConfirmObscured = !_isConfirmObscured),
                         ),
 
                         // Checkbox
@@ -225,65 +178,56 @@ class _RegisterPageState extends State<RegisterPage> {
                           children: [
                             Checkbox(
                               value: _isAgreed,
-                              onChanged: (v) {
-                                setState(() => _isAgreed = v ?? false);
-                              },
+                              activeColor: AppColors.primary,
+                              onChanged: (v) => setState(() => _isAgreed = v ?? false),
                             ),
                             Expanded(
                               child: Text.rich(
                                 TextSpan(
-                                  text: "Saya setuju dengan ",
+                                  text: "${l10n.iAgreeTo} ",
                                   children: [
                                     TextSpan(
-                                      text: "Syarat & Ketentuan",
+                                      text: l10n.termsAndConditions,
                                       style: const TextStyle(
-                                        color: Color(0xFFC7491E),
+                                        color: AppColors.accent,
                                         fontWeight: FontWeight.bold,
                                       ),
-                                      recognizer: TapGestureRecognizer()
-                                        ..onTap = _showTermsDialog,
+                                      recognizer: TapGestureRecognizer()..onTap = () => _showTermsDialog(l10n),
                                     ),
                                   ],
                                 ),
+                                style: const TextStyle(fontSize: 12),
                               ),
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 25),
-
                         ElevatedButton(
-                          onPressed: _isLoading ? null : _handleRegister,
+                          onPressed: _isLoading ? null : () => _handleRegister(l10n),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFC7491E),
+                            backgroundColor: AppColors.primary,
                             minimumSize: const Size(double.infinity, 60),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                           ),
                           child: _isLoading
-                              ? const CircularProgressIndicator(
-                                  color: Color.fromARGB(255, 255, 255, 255),
-                                )
-                              : const Text(
-                                  'Daftar Sekarang',
-                                  style: TextStyle(
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : Text(
+                                  l10n.registerNow,
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                         ),
-
                         const SizedBox(height: 20),
-                        buildDivider("atau"),
-
+                        buildDivider(l10n.or),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text("Sudah punya akun? "),
+                            Text("${l10n.alreadyHaveAccount} "),
                             buildClickableText(
-                              text: "Masuk",
+                              text: l10n.login,
                               onTap: () => Navigator.pop(context),
                             ),
                           ],

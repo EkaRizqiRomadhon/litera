@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:litera2/auth_service.dart';
+import 'package:litera2/l10n/app_localizations.dart';
+import '../core/app_colors.dart';
 import '../widgets/custom_elements.dart';
 import 'register_page.dart';
 
@@ -12,7 +14,6 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool _isObscured = true;
-
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -24,51 +25,42 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   // ================= RESET PASSWORD =================
-  void _showResetDialog() {
+  void _showResetDialog(AppLocalizations l10n) {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Reset Password"),
+          title: Text(l10n.resetPassword),
           content: TextField(
             controller: _emailController,
-            decoration: const InputDecoration(hintText: "Masukkan email"),
+            decoration: InputDecoration(hintText: l10n.enterEmailHint),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Batal"),
+              child: Text(l10n.cancel),
             ),
             TextButton(
               onPressed: () async {
                 final email = _emailController.text.trim();
-
                 if (email.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Email tidak boleh kosong")),
+                    SnackBar(content: Text(l10n.emailEmpty)),
                   );
                   return;
                 }
-
                 final result = await AuthService().resetPassword(email);
-
                 if (!context.mounted) return;
-
                 Navigator.pop(context);
-
                 if (result == "success") {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Link reset password dikirim ke email"),
-                    ),
+                    SnackBar(content: Text(l10n.verificationSent)),
                   );
                 } else {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(result)));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
                 }
               },
-              child: const Text("Kirim"),
+              child: Text(l10n.confirm),
             ),
           ],
         );
@@ -79,46 +71,45 @@ class _LoginPageState extends State<LoginPage> {
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFF2D5A41),
+      backgroundColor: AppColors.primary,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 20),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Column(
-                  children: const [
-                    Text(
-                      'Litera',
-                      style: TextStyle(
-                        fontSize: 42,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Column(
+                children: [
+                  const Text(
+                    'Litera',
+                    style: TextStyle(
+                      fontSize: 42,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
-                    Text(
-                      'BACA. JELAJAH. BERKEMBANG.',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.white70,
-                        letterSpacing: 1.2,
-                      ),
+                  ),
+                  Text(
+                    l10n.appSlogan.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.white70,
+                      letterSpacing: 1.2,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-
-              Material(
-                color: const Color(0xFFF2F1ED),
+            ),
+            Expanded(
+              child: Material(
+                color: isDark ? AppColors.backgroundDark : const Color(0xFFF2F1ED),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(50),
-                  bottom: Radius.circular(50),
                 ),
-                child: Container(
-                  width: double.infinity,
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 25,
                     vertical: 35,
@@ -126,55 +117,48 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Selamat datang',
-                        style: TextStyle(
+                      Text(
+                        l10n.welcomeBack,
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 20),
-
                       // GOOGLE LOGIN
                       buildGoogleButton(
                         onTap: () async {
-                          String result = await AuthService()
-                              .signInWithGoogle();
-
+                          String result = await AuthService().signInWithGoogle();
                           if (!context.mounted) return;
-
                           if (result == "success") {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Berhasil masuk dengan Google!"),
+                              SnackBar(
+                                content: Text(l10n.loginSuccess),
                                 backgroundColor: Colors.green,
                               ),
                             );
                           } else if (result != "Login dibatalkan") {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Gagal login: $result"),
-                                backgroundColor: Colors.redAccent,
+                                content: Text("${l10n.loginError}: $result"),
+                                backgroundColor: AppColors.error,
                               ),
                             );
                           }
                         },
                       ),
-
                       const SizedBox(height: 20),
-                      buildDivider("atau email"),
+                      buildDivider(l10n.orEmail),
                       const SizedBox(height: 20),
-
                       // EMAIL
                       buildInputField(
-                        label: "Email",
-                        hint: "budi@email.com",
+                        label: l10n.email,
+                        hint: "email@litera.com",
                         controller: _emailController,
                       ),
-
                       // PASSWORD
                       buildInputField(
-                        label: "Password",
+                        label: l10n.password,
                         hint: "••••••••",
                         isPassword: true,
                         controller: _passwordController,
@@ -183,44 +167,30 @@ class _LoginPageState extends State<LoginPage> {
                           setState(() => _isObscured = !_isObscured);
                         },
                       ),
-
                       Align(
                         alignment: Alignment.centerRight,
                         child: buildClickableText(
-                          text: "Lupa password?",
-                          onTap: _showResetDialog, // 
+                          text: l10n.forgotPassword,
+                          onTap: () => _showResetDialog(l10n),
                         ),
                       ),
-
                       const SizedBox(height: 25),
-
                       ElevatedButton(
                         onPressed: () async {
                           final email = _emailController.text.trim();
                           final password = _passwordController.text.trim();
-
                           if (email.isEmpty || password.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  "Email dan password tidak boleh kosong",
-                                ),
-                              ),
+                              SnackBar(content: Text(l10n.errorGeneral)),
                             );
                             return;
                           }
-
-                          String result = await AuthService().login(
-                            email,
-                            password,
-                          );
-
+                          String result = await AuthService().login(email, password);
                           if (!context.mounted) return;
-
                           if (result == "success") {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Berhasil Masuk!"),
+                              SnackBar(
+                                content: Text(l10n.loginSuccess),
                                 backgroundColor: Colors.green,
                               ),
                             );
@@ -228,36 +198,34 @@ class _LoginPageState extends State<LoginPage> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(result),
-                                backgroundColor: Colors.redAccent,
+                                backgroundColor: AppColors.error,
                               ),
                             );
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFC7491E),
+                          backgroundColor: AppColors.primary,
                           minimumSize: const Size(double.infinity, 55),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15),
                           ),
                         ),
-                        child: const Text(
-                          'Masuk',
-                          style: TextStyle(
+                        child: Text(
+                          l10n.login,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text("Belum punya akun? "),
+                          Text("${l10n.noAccount} "),
                           buildClickableText(
-                            text: "Daftar sekarang",
+                            text: l10n.registerNow,
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -271,8 +239,8 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

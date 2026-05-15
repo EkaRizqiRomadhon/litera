@@ -4,7 +4,7 @@ import '../models/reading_history_model.dart';
 import '../services/reading_history_service.dart';
 
 /// Provider untuk state riwayat membaca, dengan realtime sync ke Firestore
-class ReadingProvider extends ChangeNotifier {
+class HistoryProvider extends ChangeNotifier {
   List<ReadingHistoryModel> _history = [];
   bool _isLoading = false;
   String _error = '';

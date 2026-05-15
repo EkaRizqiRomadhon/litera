@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/app_colors.dart';
 
 class ProfileMenuTile extends StatelessWidget {
   final IconData icon;
@@ -32,9 +33,9 @@ class ProfileMenuTile extends StatelessWidget {
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: subtitle != null
-          ? Text(subtitle!, style: const TextStyle(fontSize: 12))
+          ? Text(subtitle!, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))
           : null,
-      trailing: trailing ?? const Icon(Icons.chevron_right, color: Colors.grey),
+      trailing: trailing ?? const Icon(Icons.chevron_right, color: AppColors.textMuted),
       onTap: onTap,
     );
   }

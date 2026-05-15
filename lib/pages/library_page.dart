@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:litera2/l10n/app_localizations.dart';
+
+import '../core/app_colors.dart';
 import '../models/book_model.dart';
 import '../providers/bookmark_provider.dart';
-import '../providers/reading_provider.dart';
+import '../providers/history_provider.dart';
 import '../models/reading_history_model.dart';
 import '../widgets/book_cover_widget.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/rating_bar_widget.dart';
+import '../services/book_service.dart';
 import 'detail_book_page.dart';
 
 class LibraryPage extends StatelessWidget {
@@ -13,29 +18,50 @@ class LibraryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return DefaultTabController(
       length: 2,
-      child: Column(
-        children: [
-          const TabBar(
-            labelColor: Color(0xFF2D5A41),
-            indicatorColor: Color(0xFF2D5A41),
-            unselectedLabelColor: Colors.grey,
-            indicatorWeight: 3,
-            tabs: [
-              Tab(text: 'Koleksi Saya'),
-              Tab(text: 'Riwayat Baca'),
-            ],
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _BookmarkTab(),
-                _HistoryTab(),
-              ],
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(l10n.myCollection),
+          centerTitle: false,
+          toolbarHeight: 70,
+          backgroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(50),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelColor: AppColors.primary,
+                  indicatorColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textMuted,
+                  indicatorWeight: 4,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                  dividerColor: Colors.transparent,
+                  tabs: [
+                    Tab(text: l10n.myCollection),
+                    Tab(text: l10n.readingHistory),
+                  ],
+                ),
+              ),
             ),
           ),
-        ],
+        ),
+        body: TabBarView(
+          children: [
+            _BookmarkTab(l10n: l10n),
+            _HistoryTab(l10n: l10n),
+          ],
+        ),
       ),
     );
   }
@@ -44,32 +70,36 @@ class LibraryPage extends StatelessWidget {
 // ── Tab Koleksi (Bookmark) ────────────────────────────────────────────────────
 
 class _BookmarkTab extends StatelessWidget {
+  final AppLocalizations l10n;
+  const _BookmarkTab({required this.l10n});
+
   @override
   Widget build(BuildContext context) {
     return Consumer<BookmarkProvider>(
       builder: (context, prov, _) {
         if (prov.isLoading) {
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: 4,
+            padding: const EdgeInsets.all(20),
+            itemCount: 5,
             itemBuilder: (_, _) => const BookListSkeleton(),
           );
         }
 
         if (prov.isEmpty) {
-          return const EmptyState(
+          return EmptyState(
             icon: Icons.bookmark_outline_rounded,
-            title: 'Koleksi Kosong',
-            message:
-                'Tandai buku favoritmu dengan ikon bookmark\ndan temukan kembali di sini.',
+            title: l10n.emptyCollectionTitle,
+            message: l10n.emptyCollectionSubtitle,
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+          physics: const BouncingScrollPhysics(),
           itemCount: prov.bookmarks.length,
           itemBuilder: (_, i) => _BookmarkCard(
             book: prov.bookmarks[i],
+            l10n: l10n,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => DetailBookPage(book: prov.bookmarks[i])),
@@ -84,81 +114,99 @@ class _BookmarkTab extends StatelessWidget {
 
 class _BookmarkCard extends StatelessWidget {
   final BookModel book;
+  final AppLocalizations l10n;
   final VoidCallback onTap;
   final VoidCallback onRemove;
 
   const _BookmarkCard({
     required this.book,
+    required this.l10n,
     required this.onTap,
     required this.onRemove,
   });
-
-  Color _colorFromId(String id) {
-    const colors = [Color(0xFF2D5A41), Color(0xFF1A4A7A), Color(0xFF7A3A1A), Color(0xFF4A2D7A), Color(0xFF1A6A6A)];
-    if (id.isEmpty) return colors[0];
-    return colors[id.codeUnitAt(id.length - 1) % colors.length];
-  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          )
+        ],
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.05)),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(24),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
                 BookCoverWidget(
                   imageUrl: book.bestCover,
-                  width: 65,
-                  height: 95,
-                  borderRadius: 10,
-                  fallbackColor: _colorFromId(book.id),
+                  width: 70,
+                  height: 105,
+                  borderRadius: 14,
+                  fallbackColor: AppColors.primary.withValues(alpha: 0.1),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(book.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text(book.authorsDisplay, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                      const SizedBox(height: 8),
+                      Text(
+                        book.title,
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.2),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        book.authorsDisplay,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2D5A41).withValues(alpha: 0.08),
+                              color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text(book.categoryDisplay, style: const TextStyle(fontSize: 10, color: Color(0xFF2D5A41), fontWeight: FontWeight.w700)),
+                            child: Text(
+                              book.categoryDisplay,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                           if (book.averageRating > 0) ...[
-                            const SizedBox(width: 8),
-                            const Icon(Icons.star_rounded, color: Color(0xFFFACC15), size: 13),
-                            const SizedBox(width: 2),
-                            Text(book.averageRating.toStringAsFixed(1), style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 10),
+                            StarDisplay(rating: book.averageRating, starSize: 11),
                           ],
                         ],
                       ),
                     ],
                   ),
                 ),
-                // Hapus bookmark
                 IconButton(
                   onPressed: () => _showRemoveDialog(context),
-                  icon: const Icon(Icons.bookmark_remove_outlined, color: Colors.grey),
+                  icon: const Icon(Icons.bookmark_remove_rounded, color: AppColors.error, size: 22),
+                  visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
@@ -171,16 +219,19 @@ class _BookmarkCard extends StatelessWidget {
   void _showRemoveDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Hapus dari Koleksi?'),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(l10n.removeBookmark, style: const TextStyle(fontWeight: FontWeight.w800)),
         content: Text('Buku "${book.title}" akan dihapus dari koleksi Anda.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
           FilledButton(
-            onPressed: () { Navigator.pop(context); onRemove(); },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Hapus'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              onRemove();
+            },
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -191,33 +242,38 @@ class _BookmarkCard extends StatelessWidget {
 // ── Tab Riwayat Baca ─────────────────────────────────────────────────────────
 
 class _HistoryTab extends StatelessWidget {
+  final AppLocalizations l10n;
+  const _HistoryTab({required this.l10n});
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<ReadingProvider>(
+    return Consumer<HistoryProvider>(
       builder: (context, prov, _) {
         if (prov.isLoading) {
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: 4,
+            padding: const EdgeInsets.all(20),
+            itemCount: 5,
             itemBuilder: (_, _) => const BookListSkeleton(),
           );
         }
 
         if (prov.isEmpty) {
-          return const EmptyState(
+          return EmptyState(
             icon: Icons.history_edu_rounded,
-            title: 'Belum Ada Riwayat',
-            message: 'Mulai membaca buku untuk melacak\nprogres bacaanmu.',
+            title: l10n.emptyHistoryTitle,
+            message: l10n.emptyHistorySubtitle,
           );
         }
 
-        final all = [...prov.continueReading, ...prov.finishedBooks];
+        final all = prov.history;
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+          physics: const BouncingScrollPhysics(),
           itemCount: all.length,
           itemBuilder: (_, i) => _HistoryCard(
             history: all[i],
+            l10n: l10n,
             onDelete: () => prov.deleteHistory(all[i].bookId),
           ),
         );
@@ -228,69 +284,120 @@ class _HistoryTab extends StatelessWidget {
 
 class _HistoryCard extends StatelessWidget {
   final ReadingHistoryModel history;
+  final AppLocalizations l10n;
   final VoidCallback onDelete;
 
-  const _HistoryCard({required this.history, required this.onDelete});
+  const _HistoryCard({
+    required this.history,
+    required this.l10n,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          )
+        ],
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.05)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => BookService.openBookById(context, history.bookId),
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
             BookCoverWidget(
               imageUrl: history.thumbnail,
-              width: 65,
-              height: 95,
-              borderRadius: 10,
-              fallbackColor: const Color(0xFF2D5A41),
+              width: 70,
+              height: 105,
+              borderRadius: 14,
+              fallbackColor: AppColors.primary.withValues(alpha: 0.1),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(history.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Text(history.authors, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                  const SizedBox(height: 10),
+                  Text(
+                    history.title,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, height: 1.2),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    history.authors,
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
                   if (history.isFinished)
-                    Row(children: const [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFF2D5A41), size: 16),
-                      SizedBox(width: 4),
-                      Text('Selesai Dibaca', style: TextStyle(fontSize: 12, color: Color(0xFF2D5A41), fontWeight: FontWeight.w600)),
-                    ])
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Selesai Dibaca',
+                          style: TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    )
                   else ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: history.progress,
-                        minHeight: 5,
-                        backgroundColor: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
-                        color: const Color(0xFF2D5A41),
-                      ),
+                    Stack(
+                      children: [
+                        Container(
+                          height: 6,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: history.progress.clamp(0.0, 1.0),
+                          child: Container(
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text('${history.progressPercent}% selesai', style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Text(
+                      l10n.percentDone(history.progressPercent),
+                      style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w800),
+                    ),
                   ],
                 ],
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 20),
+              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 22),
               onPressed: onDelete,
+              visualDensity: VisualDensity.compact,
             ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

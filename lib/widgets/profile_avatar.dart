@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/profile_controller.dart';
+import '../core/app_colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 /// Widget avatar profil yang reaktif terhadap perubahan URL dan loading state.
 /// Menggunakan cache buster agar gambar selalu segar setelah diupdate.
 class ProfileAvatar extends StatelessWidget {
   final String? photoUrl;
-  final int photoVersion;
   final bool isLoading;
   final VoidCallback onTap;
   final double radius;
@@ -15,7 +15,6 @@ class ProfileAvatar extends StatelessWidget {
   const ProfileAvatar({
     super.key,
     required this.photoUrl,
-    required this.photoVersion,
     required this.isLoading,
     required this.onTap,
     this.radius = 55,
@@ -35,9 +34,9 @@ class ProfileAvatar extends StatelessWidget {
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF2D5A41).withValues(alpha: 0.12),
+              color: AppColors.primary.withValues(alpha: 0.12),
               border: Border.all(
-                color: const Color(0xFF2D5A41).withValues(alpha: 0.3),
+                color: AppColors.primary.withValues(alpha: 0.3),
                 width: 2,
               ),
             ),
@@ -54,7 +53,7 @@ class ProfileAvatar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: const Color(0xFF2D5A41),
+                color: AppColors.primary,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
               ),
@@ -69,14 +68,11 @@ class ProfileAvatar extends StatelessWidget {
   Widget _buildImage() {
     // Pastikan photoUrl tidak null dan tidak kosong
     if (photoUrl == null || photoUrl!.trim().isEmpty) {
-      return const Icon(Icons.person, size: 64, color: Color(0xFF2D5A41));
+      return const Icon(Icons.person, size: 64, color: AppColors.primary);
     }
 
-    // Cache buster: setiap kali photoVersion berubah, gambar dimuat ulang
-    // Gunakan trim() untuk membersihkan spasi tak sengaja
-    final cleanUrl = photoUrl!.trim();
-    final separator = cleanUrl.contains('?') ? '&' : '?';
-    final url = '$cleanUrl${separator}v=$photoVersion';
+    // Use direct URL only - ImgBB rejects query parameters like ?v=timestamp
+    final url = photoUrl!.trim();
 
     return Image.network(
       url,
@@ -88,8 +84,7 @@ class ProfileAvatar extends StatelessWidget {
       },
       errorBuilder: (context, error, stackTrace) {
         debugPrint('[ProfileAvatar] Gagal memuat gambar ($url): $error');
-        // Jika gagal, tampilkan icon person sebagai fallback daripada icon error merah yang mengganggu
-        return const Icon(Icons.person, size: 64, color: Color(0xFF2D5A41));
+        return const Icon(Icons.person, size: 64, color: AppColors.primary);
       },
     );
   }
@@ -101,10 +96,10 @@ class _LoadingPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF2D5A41).withValues(alpha: 0.05),
+      color: AppColors.primary.withValues(alpha: 0.05),
       child: const Center(
         child: CircularProgressIndicator(
-          color: Color(0xFF2D5A41),
+          color: AppColors.primary,
           strokeWidth: 2.5,
         ),
       ),
@@ -128,16 +123,22 @@ class SmallProfileAvatar extends StatelessWidget {
           builder: (context, snapshot) {
             final user = snapshot.data;
             final url = user?.photoURL;
-            final version = controller.photoVersion;
+
+            // Use direct URL only
+            String? finalUrl;
+            if (url != null && url.trim().isNotEmpty) {
+              finalUrl = url.trim();
+              debugPrint('[SmallProfileAvatar] 🖼️ Loading URL: $finalUrl');
+            }
 
             return CircleAvatar(
               radius: radius,
               backgroundColor: Colors.white.withValues(alpha: 0.3),
               child: ClipOval(
-                child: (url != null && url.trim().isNotEmpty)
+                child: (finalUrl != null)
                     ? Image.network(
-                        '${url.trim()}?v=$version',
-                        key: ValueKey('$url$version'),
+                        finalUrl,
+                        key: ValueKey(finalUrl),
                         fit: BoxFit.cover,
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;

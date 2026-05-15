@@ -41,28 +41,45 @@ class _ReaderPageState extends State<ReaderPage> {
     }
 
     try {
+      debugPrint('[ReaderPage] 🌐 Attempting to launch: $url');
       final uri = Uri.parse(url);
-      final launched = await launchUrl(
+      
+      // Try to launch in-app browser first for better UX
+      bool launched = await launchUrl(
         uri,
-        mode: LaunchMode.externalApplication,
+        mode: LaunchMode.inAppBrowserView,
       );
+
+      // Fallback to external application if in-app fails
+      if (!launched) {
+        launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      }
+
       if (!launched && mounted) {
         _showCannotOpenDialog();
       }
     } catch (e) {
+      debugPrint('[ReaderPage] ❌ Launch error: $e');
       if (mounted) _showCannotOpenDialog();
     } finally {
       if (mounted) setState(() => _isOpening = false);
     }
 
     // Update progress ke minimal (menandai sudah dibuka)
-    final progress = await ReadingHistoryService.getBookHistory(widget.book.id);
-    if (progress != null && progress.progress == 0.0) {
-      await ReadingHistoryService.updateProgress(
-        widget.book.id,
-        progress: 0.05,
-        lastPage: 1,
-      );
+    try {
+      final history = await ReadingHistoryService.getBookHistory(widget.book.id);
+      if (history != null && history.progress == 0.0) {
+        await ReadingHistoryService.updateProgress(
+          widget.book.id,
+          progress: 0.05,
+          lastPage: 1,
+        );
+      }
+    } catch (e) {
+      debugPrint('[ReaderPage] ⚠️ Error updating history: $e');
     }
   }
 
