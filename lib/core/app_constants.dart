@@ -5,6 +5,11 @@ abstract final class AppConstants {
   static const String prefLocale = 'pref_locale';
   static const String prefLanguageSelected = 'pref_language_selected';
 
+  // ── Admin Config ────────────────────────────────────────────────────────────
+  static const List<String> adminEmails = [
+    'adminlitera@gmail.com',
+  ];
+
   // ── Google Books API ───────────────────────────────────────────────────────
   static const String booksApiBase = 'https://www.googleapis.com/books/v1/volumes';
   static const String booksApiKey = 'AIzaSyCqMloMeoXcQd6npLA3QbIIYitqel88NBY';

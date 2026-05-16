@@ -9,10 +9,14 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Books collection: anyone can read, only backend/admin can write (or specific logic)
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Books collection: anyone can read, only admin can write
     match /books/{bookId} {
       allow read: if true;
-      allow write: if isSignedIn(); // In production, usually restricted to admin
+      allow write: if isAdmin();
       
       // Ratings subcollection
       match /ratings/{userId} {

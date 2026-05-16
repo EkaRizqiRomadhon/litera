@@ -21,6 +21,7 @@ class BookModel {
   final String? webReaderLink;
   final String? pdfDownloadLink;
   final String? epubDownloadLink;
+  final DateTime? createdAt;
 
   const BookModel({
     required this.id,
@@ -44,6 +45,7 @@ class BookModel {
     this.webReaderLink,
     this.pdfDownloadLink,
     this.epubDownloadLink,
+    this.createdAt,
   });
 
   /// Parse dari Google Books API JSON item
@@ -88,6 +90,7 @@ class BookModel {
       epubDownloadLink: epub['isAvailable'] == true
           ? fixUrl(epub['downloadLink'] as String?)
           : null,
+      createdAt: DateTime.now(),
     );
   }
 
@@ -114,11 +117,12 @@ class BookModel {
         'webReaderLink': webReaderLink,
         'pdfDownloadLink': pdfDownloadLink,
         'epubDownloadLink': epubDownloadLink,
+        'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       };
 
   /// Restore dari Firestore Map
-  factory BookModel.fromFirestore(Map<String, dynamic> data) => BookModel(
-        id: data['id'] as String? ?? '',
+  factory BookModel.fromFirestore(Map<String, dynamic> data, [String? docId]) => BookModel(
+        id: docId ?? (data['id'] as String? ?? ''),
         title: data['title'] as String? ?? '',
         subtitle: data['subtitle'] as String? ?? '',
         authors: List<String>.from(data['authors'] as List? ?? []),
@@ -139,6 +143,7 @@ class BookModel {
         webReaderLink: data['webReaderLink'] as String?,
         pdfDownloadLink: data['pdfDownloadLink'] as String?,
         epubDownloadLink: data['epubDownloadLink'] as String?,
+        createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       );
 
   /// Display author string

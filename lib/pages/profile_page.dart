@@ -15,6 +15,8 @@ import '../providers/history_provider.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/profile_menu_tile.dart';
 import '../widgets/stat_card.dart';
+import '../services/user_service.dart';
+import 'admin/admin_dashboard_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -89,6 +91,8 @@ class _ProfileView extends StatelessWidget {
                 _buildSectionTitle(l10n.otherSection),
                 const SizedBox(height: 8),
                 _buildOtherSection(context, l10n),
+                const SizedBox(height: 24),
+                _buildAdminSection(context),
                 const SizedBox(height: 32),
                 const Divider(),
                 const SizedBox(height: 16),
@@ -262,6 +266,36 @@ class _ProfileView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAdminSection(BuildContext context) {
+    return StreamBuilder(
+      stream: UserService.watchProfile(),
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        if (profile == null || !profile.isAdmin) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('ADMIN PANEL'),
+            const SizedBox(height: 8),
+            ProfileMenuTile(
+              icon: Icons.admin_panel_settings_rounded,
+              iconColor: AppColors.primary,
+              title: 'Admin Dashboard',
+              subtitle: 'Manage books and application data',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/app_constants.dart';
 
 class UserProfileModel {
   final String uid;
@@ -9,6 +10,7 @@ class UserProfileModel {
   final String preferredLanguage;
   final bool darkMode;
   final Map<String, dynamic> readingStats;
+  final String role; // 'admin' or 'user'
 
   UserProfileModel({
     required this.uid,
@@ -19,6 +21,7 @@ class UserProfileModel {
     this.preferredLanguage = 'id',
     this.darkMode = false,
     this.readingStats = const {},
+    this.role = 'user',
   });
 
   factory UserProfileModel.fromFirestore(Map<String, dynamic> data, String uid) {
@@ -31,6 +34,7 @@ class UserProfileModel {
       preferredLanguage: data['preferredLanguage'] as String? ?? 'id',
       darkMode: data['darkMode'] as bool? ?? false,
       readingStats: data['readingStats'] as Map<String, dynamic>? ?? {},
+      role: data['role'] as String? ?? 'user',
     );
   }
 
@@ -43,6 +47,7 @@ class UserProfileModel {
       'preferredLanguage': preferredLanguage,
       'darkMode': darkMode,
       'readingStats': readingStats,
+      'role': role,
     };
   }
 
@@ -52,6 +57,7 @@ class UserProfileModel {
     String? preferredLanguage,
     bool? darkMode,
     Map<String, dynamic>? readingStats,
+    String? role,
   }) {
     return UserProfileModel(
       uid: uid,
@@ -62,6 +68,9 @@ class UserProfileModel {
       preferredLanguage: preferredLanguage ?? this.preferredLanguage,
       darkMode: darkMode ?? this.darkMode,
       readingStats: readingStats ?? this.readingStats,
+      role: role ?? this.role,
     );
   }
+
+  bool get isAdmin => role == 'admin' || AppConstants.adminEmails.contains(email);
 }
