@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// Model untuk data buku dari Google Books API
 class BookModel {
   final String id;
@@ -22,6 +24,7 @@ class BookModel {
   final String? pdfDownloadLink;
   final String? epubDownloadLink;
   final DateTime? createdAt;
+  final String isbn;
 
   const BookModel({
     required this.id,
@@ -46,6 +49,7 @@ class BookModel {
     this.pdfDownloadLink,
     this.epubDownloadLink,
     this.createdAt,
+    this.isbn = '',
   });
 
   /// Parse dari Google Books API JSON item
@@ -57,6 +61,24 @@ class BookModel {
     final saleInfo = json['saleInfo'] as Map<String, dynamic>? ?? {};
     final pdf = accessInfo['pdf'] as Map<String, dynamic>? ?? {};
     final epub = accessInfo['epub'] as Map<String, dynamic>? ?? {};
+
+    // Ambil ISBN dari industryIdentifiers
+    final industryIdentifiers = volumeInfo['industryIdentifiers'] as List<dynamic>? ?? [];
+    String isbn = '';
+    for (var ident in industryIdentifiers) {
+      if (ident is Map<String, dynamic>) {
+        final type = ident['type'] as String?;
+        final val = ident['identifier'] as String?;
+        if (val != null) {
+          if (type == 'ISBN_13') {
+            isbn = val;
+            break;
+          } else if (type == 'ISBN_10') {
+            isbn = val;
+          }
+        }
+      }
+    }
 
     // Fix https untuk thumbnail
     String? fixUrl(String? url) {
@@ -91,6 +113,7 @@ class BookModel {
           ? fixUrl(epub['downloadLink'] as String?)
           : null,
       createdAt: DateTime.now(),
+      isbn: isbn,
     );
   }
 
@@ -118,6 +141,7 @@ class BookModel {
         'pdfDownloadLink': pdfDownloadLink,
         'epubDownloadLink': epubDownloadLink,
         'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+        'isbn': isbn,
       };
 
   /// Restore dari Firestore Map
@@ -144,6 +168,7 @@ class BookModel {
         pdfDownloadLink: data['pdfDownloadLink'] as String?,
         epubDownloadLink: data['epubDownloadLink'] as String?,
         createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+        isbn: data['isbn'] as String? ?? '',
       );
 
   /// Display author string

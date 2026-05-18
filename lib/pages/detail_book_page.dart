@@ -15,7 +15,6 @@ import '../widgets/book_card.dart';
 import '../widgets/book_cover_widget.dart';
 import '../widgets/rating_bar_widget.dart';
 import '../widgets/review_card.dart';
-import 'book_reader_page.dart';
 import '../services/book_service.dart';
 
 class DetailBookPage extends StatefulWidget {

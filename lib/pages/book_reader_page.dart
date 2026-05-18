@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:epub_view/epub_view.dart';
-import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_colors.dart';
 import '../models/book_model.dart';
 import '../services/cache_service.dart';
 import '../services/reading_history_service.dart';
-import '../providers/history_provider.dart';
+import '../services/bookmark_service.dart';
 
 class BookReaderPage extends StatefulWidget {
   final BookModel book;
@@ -34,6 +34,8 @@ class _BookReaderPageState extends State<BookReaderPage> {
   double _downloadProgress = 0;
   String? _filePath;
   String? _error;
+  int _currentProgressPercent = 0;
+  int _totalEpubChapters = 100;
 
   // PDF Controllers
   final GlobalKey<SfPdfViewerState> _pdfViewerKey = GlobalKey();
@@ -63,6 +65,14 @@ class _BookReaderPageState extends State<BookReaderPage> {
     });
 
     try {
+      // Ambil progress awal dari Firestore
+      final history = await ReadingHistoryService.getBookHistory(widget.book.id);
+      if (history != null && mounted) {
+        setState(() {
+          _currentProgressPercent = history.progressPercent;
+        });
+      }
+
       // 1. Prioritas: File lokal yang sudah ada
       if (widget.localPath != null) {
         _filePath = widget.localPath;
@@ -87,10 +97,12 @@ class _BookReaderPageState extends State<BookReaderPage> {
 
       // 3. Inisialisasi controller spesifik format
       if (!widget.isPdf && _filePath != null) {
-        final history = await ReadingHistoryService.getBookHistory(widget.book.id);
+        final prefs = await SharedPreferences.getInstance();
+        final savedCfi = prefs.getString('epub_cfi_${widget.book.id}');
+        debugPrint('[BookReaderPage] 📖 Loading EPUB with CFI: $savedCfi');
         _epubController = EpubController(
           document: EpubDocument.openFile(File(_filePath!)),
-          // EPUB usually uses Cfi for position, but we'll try to map it or just start fresh
+          epubCfi: savedCfi,
         );
       }
 
@@ -123,27 +135,83 @@ class _BookReaderPageState extends State<BookReaderPage> {
       lastPage: page,
     );
     
-    // Update Provider untuk UI reaktif (opsional jika sudah realtime stream)
-    // HistoryProvider uses watchRecentlyRead (Stream), so it updates automatically
+    if (mounted) {
+      setState(() {
+        _currentProgressPercent = (progress * 100).toInt();
+      });
+    }
+  }
 
+  Future<void> _saveEpubProgress() async {
+    if (_epubController == null) return;
+    try {
+      final cfi = _epubController!.generateEpubCfi();
+      if (cfi != null && cfi.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('epub_cfi_${widget.book.id}', cfi);
+        debugPrint('[BookReaderPage] 💾 Saved EPUB progress CFI: $cfi');
+      }
+    } catch (e) {
+      debugPrint('[BookReaderPage] ⚠️ Error saving EPUB progress: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.book.title,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.book.title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (_currentProgressPercent > 0)
+              Text(
+                'Progress: $_currentProgressPercent%',
+                style: const TextStyle(fontSize: 10, color: Colors.white70),
+              ),
+          ],
         ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
           if (widget.isPdf)
             IconButton(
-              icon: const Icon(Icons.bookmark_border),
+              icon: const Icon(Icons.toc_rounded),
+              tooltip: 'Daftar Isi PDF',
               onPressed: () => _pdfViewerKey.currentState?.openBookmarkView(),
             ),
+          StreamBuilder<bool>(
+            stream: BookmarkService.watchIsBookmarked(widget.book.id),
+            builder: (context, snapshot) {
+              final isBookmarked = snapshot.data ?? false;
+              return IconButton(
+                icon: Icon(
+                  isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                  color: isBookmarked ? Colors.amber : Colors.white,
+                ),
+                tooltip: isBookmarked ? 'Hapus Bookmark Buku' : 'Bookmark Buku',
+                onPressed: () async {
+                  final toggled = await BookmarkService.toggleBookmark(widget.book);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(toggled
+                            ? 'Buku disimpan ke bookmark'
+                            : 'Buku dihapus dari bookmark'),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+          ),
         ],
       ),
       body: _buildBody(),
@@ -258,11 +326,22 @@ class _BookReaderPageState extends State<BookReaderPage> {
       controller: _epubController!,
       onDocumentLoaded: (document) {
         debugPrint('[EpubReader] ✅ Loaded: ${document.Title}');
+        int count = 100;
+        try {
+          count = (document as dynamic).Chapters?.length ?? 
+                  (document as dynamic).chapters?.length ?? 100;
+        } catch (_) {}
+        if (mounted) {
+          setState(() {
+            _totalEpubChapters = count;
+          });
+        }
       },
       onChapterChanged: (value) {
-        // EPUB progress handling is more complex due to CFI
-        // For now, we'll just mark it as opened
-        _saveProgress(1, 100); 
+        if (value != null) {
+          _saveProgress(value.chapterNumber, _totalEpubChapters);
+        }
+        _saveEpubProgress();
       },
     );
   }

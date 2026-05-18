@@ -18,6 +18,7 @@ class GoogleBooksService {
     int maxResults = AppConstants.booksDefaultMax,
     String? orderBy,
     String? langRestrict,
+    String? filter,
   }) {
     final buf = StringBuffer(
       '${AppConstants.booksApiBase}?q=${Uri.encodeQueryComponent(query)}',
@@ -27,6 +28,7 @@ class GoogleBooksService {
     buf.write('&printType=books');
     if (orderBy != null) buf.write('&orderBy=$orderBy');
     if (langRestrict != null) buf.write('&langRestrict=$langRestrict');
+    if (filter != null) buf.write('&filter=$filter');
     if (AppConstants.booksApiKey.isNotEmpty) {
       buf.write('&key=${AppConstants.booksApiKey}');
     }
@@ -100,10 +102,41 @@ class GoogleBooksService {
     int startIndex = 0,
     int maxResults = AppConstants.booksDefaultMax,
   }) async {
+    String query = 'subject:$category';
+    String? filter;
+    String? langRestrict;
+
+    if (category.contains('&')) {
+      final parts = category.split('&');
+      final baseQuery = parts[0];
+      
+      // Parse key-value parameters like filter=free-ebooks and langRestrict=id
+      for (int i = 1; i < parts.length; i++) {
+        final pair = parts[i].split('=');
+        if (pair.length == 2) {
+          if (pair[0] == 'filter') {
+            filter = pair[1];
+          } else if (pair[0] == 'langRestrict') {
+            langRestrict = pair[1];
+          }
+        }
+      }
+
+      if (baseQuery.startsWith('all:')) {
+        query = baseQuery.replaceFirst('all:', '');
+      } else {
+        query = 'subject:$baseQuery';
+      }
+    } else if (category.startsWith('all:')) {
+      query = category.replaceFirst('all:', '');
+    }
+
     final url = _buildUrl(
-      'subject:$category',
+      query,
       startIndex: startIndex,
       maxResults: maxResults,
+      filter: filter,
+      langRestrict: langRestrict,
     );
     final result = await _fetchJson(url);
     return _parseItems(result);
@@ -219,6 +252,10 @@ class BookCategory {
 
   static const List<BookCategory> all = [
     BookCategory(label: 'Semua', query: 'bestseller'),
+    BookCategory(label: 'Gratis Indonesia', query: 'all:*&filter=free-ebooks&langRestrict=id'),
+    BookCategory(label: 'Gratis Global', query: 'all:classic&filter=free-ebooks'),
+    BookCategory(label: 'Sastra Indo', query: 'all:sastra indonesia&langRestrict=id'),
+    BookCategory(label: 'Sejarah Indo', query: 'all:sejarah indonesia&langRestrict=id'),
     BookCategory(label: 'Novel', query: 'subject:fiction novel'),
     BookCategory(label: 'Teknologi', query: 'subject:technology computers'),
     BookCategory(label: 'Bisnis', query: 'subject:business economics'),
